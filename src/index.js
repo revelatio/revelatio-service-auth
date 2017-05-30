@@ -1,13 +1,33 @@
 require('dotenv').config()
 import axios from 'axios'
-import { router, get } from './microrouter'
+import { router, get } from 'microrouter'
 import uid from 'uid-promise'
+import jwt from 'jsonwebtoken'
+import GitHubApi from 'github'
+import { decode } from 'querystring'
+import Promise from 'bluebird'
+import R from 'ramda'
 
 const githubUrl = process.env.GH_HOST || 'github.com'
 
+const cleanUser = R.pick([
+  "login", "id", "avatar_url", "name", "company", "location", "email"
+])
+
+const github = new GitHubApi({
+  debug: false,
+  protocol: "https",
+  host: "api.github.com",
+  headers: {
+    "user-agent": "Revelat-io-App"
+  },
+  Promise,
+  followRedirects: false,
+  timeout: 5000
+})
+
 const login = async (req, res) => {
   const state = await uid(20)
-  // Should save state in a temporal DB
   return res.redirect(`https://${githubUrl}/login/oauth/authorize?client_id=${process.env.GH_CLIENT_ID}&state=${state}`)
 }
 
@@ -16,13 +36,11 @@ const callback = async (req, res) => {
   const { code, state } = req.query
 
   if (!code && !state) {
-    res.redirect('/')
-    //  Should check state in temporal DB
-    // } else if (!states.includes(state)) {
-    //   res.redirect('/')
+    return res.redirect('/')
   }
 
   try {
+    // Use code to get an access_token from github
     const { status, data } = await axios({
       method: 'POST',
       url: `https://${githubUrl}/login/oauth/access_token`,
@@ -38,13 +56,39 @@ const callback = async (req, res) => {
       return res.send('GitHub server error.')
     }
 
-    return res.json(data)
+    // Get logged user information and craft a JWT Cookie
+    const { access_token } = decode(data)
+    github.authenticate({
+      type: "oauth",
+      token: access_token
+    })
+    const user = await github.users.get({})
+    const resultToken = cleanUser(user.data)
+
+    const token = jwt.sign(
+      resultToken,
+      process.env.JWT_SECRET,
+      {
+        expiresIn: '365d'
+      }
+    )
+
+    // Create the JWT Cookie and redirect to /
+    return res.cookie(
+      'auth_token',
+      token,
+      {expires: new Date(Date.now() + 31536000000), httpOnly: false}
+    )
+      .redirect('/')
+
   } catch (err) {
-    return res.send('Please provide GH_CLIENT_ID and GH_CLIENT_SECRET as environment variables. (or GitHub might be down)')
+    console.log(err)
+    return res.redirect(`/?err=${err.toString()}`)
   }
 }
 
 export const handler = router(
   get('/login/callback', callback),
-  get('/login', login)
+  get('/login', login),
+  (req, res) => res.send('ok')
 )
