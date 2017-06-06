@@ -7,24 +7,25 @@ import GitHubApi from 'github'
 import { decode } from 'querystring'
 import Promise from 'bluebird'
 import R from 'ramda'
+import { MongoClient } from 'mongodb'
 
 const githubUrl = process.env.GH_HOST || 'github.com'
 
-const cleanUser = R.pick([
-  "login", "id", "avatar_url", "name", "company", "location", "email"
-])
+const cleanUser = R.pick(['login', 'avatar_url', 'name', 'company', 'location', 'email'])
 
 const github = new GitHubApi({
   debug: false,
-  protocol: "https",
-  host: "api.github.com",
+  protocol: 'https',
+  host: 'api.github.com',
   headers: {
-    "user-agent": "Revelat-io-App"
+    'user-agent': 'Revelat-io-App'
   },
   Promise,
   followRedirects: false,
   timeout: 5000
 })
+
+const connectMongoDB = () => MongoClient.connect(process.env.MONGODB)
 
 const login = async (req, res) => {
   const state = await uid(20)
@@ -32,7 +33,6 @@ const login = async (req, res) => {
 }
 
 const callback = async (req, res) => {
-  res.setHeader('Content-Type', 'text/html')
   const { code, state } = req.query
 
   if (!code && !state) {
@@ -59,21 +59,32 @@ const callback = async (req, res) => {
     // Get logged user information and craft a JWT Cookie
     const { access_token } = decode(data)
     github.authenticate({
-      type: "oauth",
+      type: 'oauth',
       token: access_token
     })
     const user = await github.users.get({})
     const resultToken = cleanUser(user.data)
+    const id = user.data.id
 
-    const token = jwt.sign(
-      resultToken,
-      process.env.JWT_SECRET,
-      {
-        expiresIn: '365d'
-      }
-    )
+    // Store user on DB
+    const db = await connectMongoDB()
+    const accounts = await db.collection('accounts')
+    const userAccount = await accounts.findOne({_id: id})
+    const userAccountUpdate = {...resultToken, _id: id, accessToken: access_token}
+    if (!userAccount) {
+      await accounts.insertOne(userAccountUpdate)
+    } else {
+      await accounts.replaceOne(
+        {_id: id},
+        userAccountUpdate
+      )
+    }
+
+    await db.close()
 
     // Create the JWT Cookie and redirect to /
+    const token = jwt.sign({...resultToken, id}, process.env.JWT_SECRET,{expiresIn: '365d'})
+
     return res.cookie(
       'auth_token',
       token,
