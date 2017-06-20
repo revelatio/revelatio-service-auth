@@ -5,8 +5,7 @@
   "main": "lib/index.js",
   "scripts": {
     "deploy": "gcloud beta functions deploy revelatio-service-auth-0_1_1 --entry-point handler --trigger-http --stage-bucket revelatio-functions --memory=256MB",
-    "build": "rm -rf lib/ && `yarn bin`/babel ./src --out-dir ./lib --ignore index-local.js",
-    "dev": "node src/index-local.js"
+    "build": "rm -rf lib/ && `yarn bin`/babel ./src --out-dir ./lib --ignore index-local.js"
   },
   "author": "Ernesto Freyre",
   "license": "MIT",
@@ -36,6 +35,8 @@
     "sinon": "^2.2.0"
   },
   "local": {
-    "port": 3001
+    "port": 3001,
+    "watch": ["src"],
+    "script": "src/run-local.js"
   }
 }

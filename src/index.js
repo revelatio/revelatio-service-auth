@@ -6,13 +6,9 @@ import jwt from 'jsonwebtoken'
 import GitHubApi from 'github'
 import { decode } from 'querystring'
 import Promise from 'bluebird'
-import R from 'ramda'
-import { MongoClient } from 'mongodb'
+import { cleanUser, connectMongoDB } from './helpers'
 
 const githubUrl = process.env.GH_HOST || 'github.com'
-
-const cleanUser = R.pick(['login', 'avatar_url', 'name', 'company', 'location', 'email'])
-
 const github = new GitHubApi({
   debug: false,
   protocol: 'https',
@@ -24,8 +20,6 @@ const github = new GitHubApi({
   followRedirects: false,
   timeout: 5000
 })
-
-const connectMongoDB = () => MongoClient.connect(process.env.MONGODB)
 
 const login = async (req, res) => {
   const state = await uid(20)
