@@ -4,7 +4,8 @@
   "description": "Revelat.io Github auth service",
   "main": "lib/index.js",
   "scripts": {
-    "deploy": "gcloud beta functions deploy revelatio-service-auth-0_1_1 --entry-point handler --trigger-http --stage-bucket revelatio-functions --memory=256MB",
+    "dev": "PORT=3000 node src/run-local.js",
+    "deploy": "gcloud beta functions deploy revelatio-service-auth-0-1-1 --entry-point handler --trigger-http --stage-bucket revelatio-functions --memory=256MB",
     "build": "rm -rf lib/ && `yarn bin`/babel ./src --out-dir ./lib --ignore index-local.js"
   },
   "author": "Ernesto Freyre",
@@ -13,6 +14,7 @@
     "axios": "^0.15.3",
     "babel-runtime": "^6.23.0",
     "bluebird": "^3.5.0",
+    "del": "^3.0.0",
     "dotenv": "^4.0.0",
     "express": "^4.15.3",
     "github": "^9.2.0",
@@ -20,8 +22,11 @@
     "microrouter": "^2.1.1",
     "mongodb": "^2.2.28",
     "querystring": "^0.2.0",
-    "ramda": "^0.24.0",
-    "uid-promise": "^0.1.0"
+    "ramda": "^0.24.1",
+    "sha1": "^1.1.1",
+    "ssh-keygen": "^0.4.1",
+    "uid-promise": "^0.1.0",
+    "uuid": "^3.1.0"
   },
   "devDependencies": {
     "babel-cli": "^6.24.1",
@@ -33,10 +38,5 @@
     "must": "^0.13.4",
     "must-sinon": "^0.0.0",
     "sinon": "^2.2.0"
-  },
-  "local": {
-    "port": 3001,
-    "watch": ["src"],
-    "script": "src/run-local.js"
   }
 }

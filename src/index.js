@@ -6,28 +6,37 @@ import jwt from 'jsonwebtoken'
 import GitHubApi from 'github'
 import { decode } from 'querystring'
 import Promise from 'bluebird'
-import { cleanUser, connectMongoDB } from './helpers'
+import R from 'ramda'
+import { cleanUser, connectMongoDB, generateKeypair } from './helpers'
 
 const githubUrl = process.env.GH_HOST || 'github.com'
-const github = new GitHubApi({
-  debug: false,
-  protocol: 'https',
-  host: 'api.github.com',
-  headers: {
-    'user-agent': 'Revelat-io-App'
-  },
-  Promise,
-  followRedirects: false,
-  timeout: 5000
-})
+
+const getKeysForUser = (github) => github.users.getKeys({})
+  .then(R.prop('data'))
 
 const login = async (req, res) => {
   const state = await uid(20)
-  return res.redirect(`https://${githubUrl}/login/oauth/authorize?client_id=${process.env.GH_CLIENT_ID}&state=${state}`)
+
+  return res.redirect(`https://${githubUrl}/login/oauth/authorize` +
+    `?client_id=${process.env.GH_CLIENT_ID}` +
+    `&state=${state}` +
+    `&scope=user,write:public_key,repo`
+  )
 }
 
 const callback = async (req, res) => {
   const { code, state } = req.query
+  const github = new GitHubApi({
+    debug: false,
+    protocol: 'https',
+    host: 'api.github.com',
+    headers: {
+      'user-agent': 'Revelat-io-App'
+    },
+    Promise,
+    followRedirects: false,
+    timeout: 5000
+  })
 
   if (!code && !state) {
     return res.redirect('/')
@@ -59,12 +68,13 @@ const callback = async (req, res) => {
     const user = await github.users.get({})
     const resultToken = cleanUser(user.data)
     const id = user.data.id
+    const userAccountUpdate = {...resultToken, _id: id, accessToken: access_token}
 
     // Store user on DB
     const db = await connectMongoDB()
     const accounts = await db.collection('accounts')
     const userAccount = await accounts.findOne({_id: id})
-    const userAccountUpdate = {...resultToken, _id: id, accessToken: access_token}
+
     if (!userAccount) {
       await accounts.insertOne(userAccountUpdate)
     } else {
@@ -74,6 +84,7 @@ const callback = async (req, res) => {
       )
     }
 
+    // Close DB
     await db.close()
 
     // Create the JWT Cookie and redirect to /
@@ -92,8 +103,12 @@ const callback = async (req, res) => {
   }
 }
 
+
+const genkeys = (req, res) => generateKeypair().then(keys => res.json(keys))
+
 export const handler = router(
   get('/login/callback', callback),
   get('/login', login),
+  get('/login/keypair', genkeys),
   (req, res) => res.send('ok')
 )
