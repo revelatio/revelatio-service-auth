@@ -7,19 +7,16 @@ import GitHubApi from 'github'
 import { decode } from 'querystring'
 import Promise from 'bluebird'
 import R from 'ramda'
-import { cleanUser, connectMongoDB, generateKeypair } from './helpers'
+import { cleanUser, connectMongoDB } from './helpers'
 
 const githubUrl = process.env.GH_HOST || 'github.com'
-
-const getKeysForUser = (github) => github.users.getKeys({})
-  .then(R.prop('data'))
 
 const login = async (req, res) => {
   const state = await uid(20)
 
   return res.redirect(`https://${githubUrl}/login/oauth/authorize` +
     `?client_id=${process.env.GH_CLIENT_ID}` +
-    `&state=${state}` +
+    `&state=${'dev' in req.query && 'DEV'}${state}` +
     `&scope=user,write:public_key,repo`
   )
 }
@@ -40,6 +37,10 @@ const callback = async (req, res) => {
 
   if (!code && !state) {
     return res.redirect('/')
+  }
+
+  if (state.indexOf('DEV') === 0) {
+    return res.send('DEV-MODE')
   }
 
   try {
@@ -103,12 +104,8 @@ const callback = async (req, res) => {
   }
 }
 
-
-const genkeys = (req, res) => generateKeypair().then(keys => res.json(keys))
-
 export const handler = router(
   get('/login/callback', callback),
   get('/login', login),
-  get('/login/keypair', genkeys),
   (req, res) => res.send('ok')
 )
